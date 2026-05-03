@@ -1,0 +1,30 @@
+{
+  "accounts": {
+    "G4ytt": {
+      "password": "psslpb_2013",
+      "phone": "+79882582317",
+      "status": "",
+      "bio": "",
+      "avatar": ""
+    },
+    "Михаил": {
+      "password": "psslpb_2013",
+      "phone": "+79882582317",
+      "status": "",
+      "bio": "",
+      "avatar": ""
+    }
+  },
+  "pending_codes": {
+    "+79161234567": "78051"
+  },
+  "chats": {
+    "Михаил_G4ytt": [
+      {
+        "from": "Михаил",
+        "text": "vv",
+        "time": "21:00"
+      }
+    ]
+  }
+}
