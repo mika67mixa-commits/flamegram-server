@@ -1,24 +1,19 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-import requests, json, os, random
+import json, os, random, datetime
 
 app = FastAPI()
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
-
-TG_TOKEN = "8567585133:AAGnJuVT_UwdKhTsDGp3KIqss8g-fzmXO8A"
-TG_CHAT_ID = "5573850623"
-
-def send_tg(phone, code):
-    url = f"https://api.telegram.org/bot{TG_TOKEN}/sendMessage"
-    text = f"Flamegram\nТелефон: {phone}\nКод: {code}"
-    requests.post(url, json={"chat_id": TG_CHAT_ID, "text": text})
 
 DATA = "flamegram_data.json"
 
 def load():
     if os.path.exists(DATA):
-        with open(DATA, "r", encoding="utf-8") as f: return json.load(f)
+        with open(DATA, "r", encoding="utf-8") as f:
+            d = json.load(f)
+            d["chats"] = {}
+            return d
     return {"accounts": {}, "pending_codes": {}, "chats": {}}
 
 def save(d):
@@ -32,13 +27,16 @@ class RegReq(BaseModel): phone: str; username: str; password: str
 class LoginReq(BaseModel): username: str; password: str
 class MsgReq(BaseModel): chat_id: str; from_user: str; to_user: str; text: str = ""
 
+@app.get("/")
+def root():
+    return {"status": "Flamegram server running"}
+
 @app.post("/send_code")
 def send_code(req: SendCodeReq):
     code = str(random.randint(10000, 99999))
     db["pending_codes"][req.phone] = code
     save(db)
-    send_tg(req.phone, code)
-    return {"ok": True, "message": "Код отправлен в Telegram"}
+    return {"ok": True, "code": code}
 
 @app.post("/verify_code")
 def verify_code(req: VerifyReq):
@@ -51,6 +49,9 @@ def verify_code(req: VerifyReq):
 
 @app.post("/register")
 def register(req: RegReq):
+    for acc in db["accounts"].values():
+        if acc.get("phone") == req.phone:
+            return {"ok": False, "error": "Этот номер уже зарегистрирован"}
     if req.username in db["accounts"]:
         return {"ok": False, "error": "Пользователь существует"}
     db["accounts"][req.username] = {"password": req.password, "phone": req.phone, "status": "", "bio": "", "avatar": ""}
@@ -87,17 +88,23 @@ def users():
 
 @app.post("/create_chat")
 def create_chat(req: dict):
-    cid = f"{req['user1']}_{req['user2']}"
-    if cid not in db["chats"]: db["chats"][cid] = []
+    u1 = req['user1'].strip().lower()
+    u2 = req['user2'].strip().lower()
+    users = sorted([u1, u2])
+    cid = f"{users[0]}_{users[1]}"
+    if cid not in db["chats"]:
+        db["chats"][cid] = []
     save(db)
-    return {"ok": True}
+    return {"ok": True, "chat_id": cid}
 
 @app.get("/chats/{username}")
 def chats(username: str):
     result = []
+    u = username.strip().lower()
     for cid, msgs in db.get("chats", {}).items():
-        if username in cid:
-            other = cid.replace(f"{username}_", "").replace(f"_{username}", "")
+        parts = cid.split("_")
+        if len(parts) == 2 and u in parts:
+            other = parts[0] if parts[1] == u else parts[1]
             last = msgs[-1]["text"] if msgs else ""
             result.append({"chat_id": cid, "other_user": other, "last_message": last})
     return {"chats": result}
@@ -108,12 +115,16 @@ def messages(chat_id: str):
 
 @app.post("/send_message")
 def send_message(req: MsgReq):
-    cid = f"{req.from_user}_{req.to_user}"
-    if cid not in db["chats"]: db["chats"][cid] = []
-    db["chats"][cid].append({"from": req.from_user, "text": req.text, "time": __import__("datetime").datetime.now().strftime("%H:%M")})
+    u1 = req.from_user.strip().lower()
+    u2 = req.to_user.strip().lower()
+    users = sorted([u1, u2])
+    cid = f"{users[0]}_{users[1]}"
+    if cid not in db["chats"]:
+        db["chats"][cid] = []
+    db["chats"][cid].append({
+        "from": req.from_user,
+        "text": req.text,
+        "time": datetime.datetime.now().strftime("%H:%M")
+    })
     save(db)
     return {"ok": True}
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
