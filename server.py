@@ -38,14 +38,22 @@ def send_code(req: SendCodeReq):
     save(db)
     return {"ok": True, "code": code}
 
-@app.post("/verify_code")
-def verify_code(req: VerifyReq):
-    saved = db["pending_codes"].get(req.phone)
-    if saved and saved == req.code:
-        del db["pending_codes"][req.phone]
-        save(db)
-        return {"ok": True}
-    return {"ok": False, "error": "Неверный код"}
+@app.post("/send_message")
+def send_message(req: MsgReq):
+    u1 = req.from_user.strip().lower()
+    u2 = req.to_user.strip().lower()
+    users = sorted([u1, u2])
+    cid = f"{users[0]}_{users[1]}"
+    if cid not in db["chats"]:
+        db["chats"][cid] = []
+    db["chats"][cid].append({
+        "from": req.from_user,
+        "text": req.text,
+        "time": datetime.datetime.now().strftime("%H:%M"),
+        "read": False
+    })
+    save(db)
+    return {"ok": True}
 
 @app.post("/register")
 def register(req: RegReq):
